@@ -1,7 +1,8 @@
 # Lab 18: Production RAG Pipeline
 
-**AICB-P2T3 · Ngày 18 · Production RAG**  
-**Giảng viên:** Trần Quang Thiện · **Thời gian:** 2h implement + 30 phút reflection
+**AICB-K34 · Ngày 18 · Production RAG**  
+**Giảng viên:** Nguyễn Tiến Đồng · **Thời gian:** 2h implement + 30 phút reflection
+**Ref**: repo của giảng viên Trần Quang Thiện K2. 
 
 ---
 
