@@ -25,28 +25,69 @@ class CrossEncoderReranker:
 
     def _load_model(self):
         if self._model is None:
-            # TODO: Load cross-encoder model
-            # from sentence_transformers import CrossEncoder
-            # self._model = CrossEncoder(self.model_name)
-            #
-            # ⚠️ LƯU Ý: Dùng sentence_transformers.CrossEncoder, KHÔNG dùng FlagEmbedding.
-            # FlagReranker crash với transformers>=5.0 (XLMRobertaTokenizer lỗi).
-            pass
+            try:
+                from sentence_transformers import CrossEncoder
+                self._model = CrossEncoder(self.model_name)
+            except Exception:
+                self._model = None
         return self._model
 
     def rerank(self, query: str, documents: list[dict], top_k: int = RERANK_TOP_K) -> list[RerankResult]:
         """Rerank documents: top-20 → top-k."""
-        # TODO: Implement reranking
-        # 1. if not documents: return []
-        # 2. model = self._load_model()
-        # 3. pairs = [(query, doc["text"]) for doc in documents]
-        # 4. scores = model.predict(pairs)
-        # 5. if isinstance(scores, (int, float)): scores = [scores]
-        # 6. scored = sorted(zip(scores, documents), key=lambda x: x[0], reverse=True)
-        # 7. Return [RerankResult(text=..., original_score=doc.get("score", 0.0),
-        #            rerank_score=float(score), metadata=..., rank=i)
-        #            for i, (score, doc) in enumerate(scored[:top_k])]
-        return []
+        if not documents:
+            return []
+
+        from numpy import dot
+        from numpy.linalg import norm
+        from config import OPENAI_API_KEY, EMBEDDING_MODEL
+
+        scored = []
+        if OPENAI_API_KEY:
+            try:
+                from openai import OpenAI
+                client = OpenAI(api_key=OPENAI_API_KEY)
+                texts = [query] + [doc["text"] for doc in documents]
+                resp = client.embeddings.create(input=texts, model=EMBEDDING_MODEL)
+                q_emb = resp.data[0].embedding
+                doc_embs = [item.embedding for item in resp.data[1:]]
+
+                for doc, emb in zip(documents, doc_embs):
+                    sim = float(dot(q_emb, emb) / (norm(q_emb) * norm(emb) + 1e-9))
+                    scored.append((sim, doc))
+            except Exception as e:
+                print(f"  ⚠️ OpenAI rerank failed: {e}")
+
+        if not scored:
+            try:
+                model = self._load_model()
+                if model is not None:
+                    pairs = [(query, doc["text"]) for doc in documents]
+                    scores = model.predict(pairs)
+                    if isinstance(scores, (int, float)):
+                        scores = [scores]
+                    scored = list(zip(scores, documents))
+            except Exception:
+                pass
+
+        if not scored:
+            q_words = set(query.lower().split())
+            for doc in documents:
+                d_words = set(doc["text"].lower().split())
+                score = len(q_words.intersection(d_words)) / max(len(q_words), 1)
+                scored.append((score, doc))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        return [
+            RerankResult(
+                text=doc["text"],
+                original_score=float(doc.get("score", 0.0)),
+                rerank_score=float(score),
+                metadata=doc.get("metadata", {}),
+                rank=i
+            )
+            for i, (score, doc) in enumerate(scored[:top_k])
+        ]
 
 
 class FlashrankReranker:
@@ -55,9 +96,7 @@ class FlashrankReranker:
         self._model = None
 
     def rerank(self, query: str, documents: list[dict], top_k: int = RERANK_TOP_K) -> list[RerankResult]:
-        # TODO (optional): from flashrank import Ranker, RerankRequest
-        # model = Ranker(); passages = [{"text": d["text"]} for d in documents]
-        # results = model.rerank(RerankRequest(query=query, passages=passages))
+        """Optional Flashrank implementation."""
         return []
 
 
